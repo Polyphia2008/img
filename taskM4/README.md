@@ -35,7 +35,9 @@ transaction, sổ cái).
 | `M4-w8-desktop-so-cai-cuon-xuong.png` | 175.552 | Sổ cái cuộn xuống (thấy thêm các dòng phía dưới) |
 | `M4-w9-desktop-so-cai-DARK.png` | 169.185 | Sổ cái **DARK MODE** — nền tối thật, chữ/badge/màu tiền vẫn rõ |
 | `M4-w10-desktop-the-cao-DARK.png` | 207.789 | Form nạp thẻ cào **DARK MODE** |
-| `M4-w11-desktop-lich-su-mua-acc.png` | 214.844 | Lịch sử mua acc (đơn hàng) |
+| `M4-w11-desktop-lich-su-mua-acc.png` | 397.766 | Lịch sử mua acc — layout mới kiểu shopaccgame (3 thẻ thống kê + lưới thẻ đơn hàng 3 cột) |
+| `M4-w11b-mobile-lich-su-mua-acc.png` | 93.157 | Lịch sử mua acc — bản mobile 390px (1 cột) |
+| `M4-w11c-desktop-lich-su-mua-acc-DARK.png` | 399.151 | Lịch sử mua acc — dark mode (token `--c-*`, không dùng `dark:`) |
 
 ## 2) Ví người dùng — mobile 390px (6 ảnh)
 
