@@ -6,10 +6,10 @@ spinner, overlay, hover-shine), nhưng dịch sang hệ CSS custom properties `-
 `--c-skel-b` của TrumAcc để **an toàn cho cả light và dark theme**.
 
 - Repo code: https://github.com/Polyphia2008/trumacc (branch `main`)
-- Code HEAD khi chụp: **`250a9f0`**
-- Bundle đang chạy khi chụp: `assets/index-IsFgqNUX.js`
-- Harness chụp ảnh: `tools/shotM6.mjs` (Playwright / chromium)
-- Tổng: **33 PNG**, **4,964,898 bytes**
+- Code HEAD khi chụp bộ skeleton: **`250a9f0`** — bundle `assets/index-IsFgqNUX.js`
+- Code HEAD khi chụp bộ overlay spinner: **`3faf9b6`** (sau `4cbaf76`) — bundle `assets/index-CTiqxvGY.js`
+- Harness chụp ảnh: `tools/shotM6.mjs` (skeleton) + `tools/shotM6x.mjs` (overlay spinner) — Playwright / chromium
+- Tổng: **41 PNG** — 33 skeleton (mục 4) + 8 overlay spinner (mục 4b), **6,520,641 bytes**
 
 ---
 
@@ -151,6 +151,109 @@ không phải regression của M6.
 | `M6-m10-mobile-home-LOADED.png` | 201,448 | Trang chủ mobile load xong — `skel=0` |
 | `M6-m11-mobile-wallet-LOADED.png` | 64,345 | Ví mobile load xong — `skel=0` |
 | `M6-m12-mobile-profile-LOADED.png` | 49,564 | Profile mobile load xong — `skel=0` |
+
+---
+
+## 4b. BỔ SUNG — Overlay spinner giữa màn hình (8 PNG, bộ `M6-x*`)
+
+Ngoài skeleton, MILESTONE 6 bổ sung **loader overlay có spinner ở giữa màn hình**, chép lại
+đúng loader của site tham chiếu **shopaccgame**
+(`resources/views/admin/layouts/master.blade.php`, khối `#page-overlay` + `.lds-double-ring`).
+
+### 4b.1 Kiến trúc 2 overlay
+
+Có **2 overlay** vì 2 tình huống load khác nhau:
+
+| Overlay | Nơi khai báo | Khi nào hiện |
+|---|---|---|
+| `#boot-overlay` | tĩnh trong `frontend/index.html` | **Tải lại / mở trang lần đầu** — render trước khi Vue mount nên phủ được cả khoảng trắng đầu tiên. Bị xoá sau `router.isReady()`. |
+| `#page-overlay` | `frontend/src/components/PageOverlay.vue` | **Đổi route trong SPA** — hook `router.beforeEach` / `afterEach` / `onError`. |
+
+Chi tiết:
+
+- `#boot-overlay` kèm một `<script>` inline chạy **trước Vue**, đọc
+  `localStorage['trumacc-theme']` và gắn `html.dark` ngay lập tức ⇒ **không bị nháy sáng
+  (theme flash)** khi user dùng dark mode; script cũng ghi `window.__bootAt` để tính thời gian
+  hiển thị tối thiểu.
+- `PageOverlay.vue`: `MIN_VISIBLE_MS = 420` (chống nhấp nháy khi route đổi quá nhanh),
+  `MAX_VISIBLE_MS = 10000` (fail-safe, tự ẩn nếu route treo). Khi mount xong thì gỡ
+  `#boot-overlay`.
+
+### 4b.2 Spec vòng xoay (theo đúng shopaccgame)
+
+`.lds-double-ring` gồm **4 phần tử con**: vòng 44×44 (`border: 4px`, 2 cạnh tô màu, quay
+0→360°), vòng 32×32 quay **ngược** 0→−360°, và 2 vòng chỉ chứa **dot 4×4** dựng bằng
+`box-shadow 0 40px` / `0 28px` (rotate 45°). Tốc độ `1s linear infinite`.
+
+### 4b.3 Token màu — an toàn dark theme
+
+Không dùng class `dark:` (Tailwind của dự án không bật `darkMode`), mà thêm 2 CSS custom
+property vào `frontend/src/style.css`:
+
+| Token | Light (`:root`) | Dark (`html.dark`) |
+|---|---|---|
+| `--c-overlay-bg` | `rgba(249, 249, 249, 0.8)` | `rgba(10, 14, 22, 0.82)` |
+| `--c-ring` | `#ce0d0d` | `#fe696a` |
+
+Có thêm khối `@media (prefers-reduced-motion: reduce)`: kéo animation về `3s` và bỏ
+`transition` cho người dùng bật giảm chuyển động.
+
+### 4b.4 Cách chụp (overlay chỉ tồn tại ~400 ms trên máy thật)
+
+Harness `tools/shotM6x.mjs`:
+
+- **Bộ reload (`M6-x1`…`M6-x4`)**: `page.route('**/api/**')` delay **6000 ms**, rồi
+  `page.goto(..., { waitUntil: 'commit' })` → `waitForSelector('#boot-overlay .lds-double-ring')`
+  → chờ 500 ms → probe → chụp. Vì API bị giữ, `#boot-overlay` còn nguyên trên màn hình.
+- **Bộ đổi route (`M6-x5`…`M6-x8`)**: load `/` xong, chờ `#boot-overlay` bị xoá, **rồi mới**
+  delay 6000 ms cho **cả `**/api/**` và `**/assets/*.js`** (chunk route lazy) → click
+  `a[href="/shop"]` → `waitForSelector('#page-overlay .lds-double-ring')` → chỉ chờ **150 ms**
+  → probe → chụp. Nếu **không** delay `/assets/*.js` thì trên localhost chunk về quá nhanh,
+  overlay tắt sau `MIN_VISIBLE_MS` và probe trả `which=NONE`.
+- Dark theme: `ctx.addInitScript(() => localStorage.setItem('trumacc-theme','dark'))`.
+- Mỗi shot **bắt buộc** kiểm tra đăng nhập: `ctx.request.get('/api/auth/profile')` phải trả
+  `200` (in dòng `AUTH[...] ok -> user01`), nếu không thì abort.
+- Chụp bằng `clip` theo viewport (không dùng `fullPage`).
+
+### 4b.5 Kết quả probe DOM (8/8, không phỏng đoán)
+
+```
+shots                    : 8
+overlay present          : 8/8
+ring 4 segments          : 8/8
+ring centered (<=2px)    : 8/8
+animating                : 8/8
+shots with overflowX     : 0
+dark shots dark=true     : 4
+FAILURES                 : 0
+```
+
+Giá trị đo được ở từng shot: `size=96x96`, `z-index=9998`, `position=fixed`, `duration=1s`;
+`animation=bootRing` (bộ reload) / `ldsDoubleRing` (bộ đổi route);
+light `bg=rgba(249, 249, 249, 0.8)` + `border=rgb(206, 13, 13)`;
+dark `bg=rgba(10, 14, 22, 0.82)` + `border=rgb(254, 105, 106)`;
+tâm vòng xoay lệch tâm viewport **≤ 2 px** ở cả 8 shot.
+
+### 4b.6 Danh sách file (8)
+
+| File | Size (B) | Nội dung |
+|---|---:|---|
+| `M6-x1-desktop-reload-SPINNER-LIGHT.png` | 9,448 | Desktop 1440 — tải lại trang, `#boot-overlay`, light |
+| `M6-x2-desktop-reload-SPINNER-DARK.png` | 9,846 | Desktop 1440 — tải lại trang, `#boot-overlay`, dark |
+| `M6-x3-mobile-reload-SPINNER-LIGHT.png` | 5,554 | Mobile 390 — tải lại trang, `#boot-overlay`, light |
+| `M6-x4-mobile-reload-SPINNER-DARK.png` | 5,992 | Mobile 390 — tải lại trang, `#boot-overlay`, dark |
+| `M6-x5-desktop-route-SPINNER-LIGHT.png` | 637,995 | Desktop 1440 — đổi route `/` → `/shop`, `#page-overlay` mờ đè lên nội dung, light |
+| `M6-x6-desktop-route-SPINNER-DARK.png` | 693,545 | Desktop 1440 — đổi route `/` → `/shop`, `#page-overlay`, dark |
+| `M6-x7-mobile-route-SPINNER-LIGHT.png` | 99,664 | Mobile 390 — đổi route `/` → `/shop`, `#page-overlay`, light |
+| `M6-x8-mobile-route-SPINNER-DARK.png` | 93,699 | Mobile 390 — đổi route `/` → `/shop`, `#page-overlay`, dark |
+
+Tổng bộ `M6-x*`: **1,555,743 bytes**.
+
+Commit code liên quan: **`4cbaf76`** (loader) + **`3faf9b6`** (harness chụp).
+
+Ở 4 ảnh `reload` phía sau overlay là trang trắng/tối vì API còn bị giữ (chưa render nội dung).
+Ở 4 ảnh `route` thấy rõ nội dung trang bị **làm mờ** phía sau lớp overlay bán trong suốt —
+đúng hành vi mong muốn.
 
 ---
 
